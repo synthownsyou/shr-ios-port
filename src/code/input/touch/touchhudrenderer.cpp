@@ -210,7 +210,7 @@ void TouchHudRenderer::Render()
 
 bool TouchHudRenderer::BeginTouchHud2D()
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     return false;
 #else
     if ( p3d::pddi == 0 )
@@ -265,7 +265,7 @@ void TouchHudRenderer::EndTouchHud2D()
 
 bool TouchHudRenderer::GetRenderDimensions( float& width, float& height ) const
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     width = 0.0f;
     height = 0.0f;
     return false;

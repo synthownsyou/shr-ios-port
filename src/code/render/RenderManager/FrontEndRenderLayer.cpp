@@ -31,6 +31,9 @@
 #ifdef RAD_WIN32
 #include <input/inputmanager.h>
 #endif
+#if defined(RAD_ANDROID) || defined(RAD_IOS)
+#include <input/touch/touchhudrenderer.h>
+#endif
 //************************************************************************
 //
 // Global Data, Local Data, Local Classes
@@ -150,6 +153,14 @@ void FrontEndRenderLayer::Render()
         HeapMgr()->PopHeap ( GMA_TEMP );
 
 //        GetBillboardQuadManager()->DisplayAll();
+
+#if defined(RAD_ANDROID) || defined(RAD_IOS)
+        // Touch control HUD drawn on top of the frontend/HUD layer. This is
+        // the hook point the touch renderer was written for (see the
+        // FrontEndRenderLayer note in touchhudrenderer.cpp's
+        // GetRenderDimensions).
+        TouchHudRenderer::GetInstance().Render();
+#endif
 
         mpView[ view ]->EndRender();
     }

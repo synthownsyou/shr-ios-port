@@ -209,11 +209,19 @@ void InputManager::Update( unsigned int timeinms )
     bool resetting = false;
     for ( i = 0; i < Input::MaxControllers; i++ )
     {
+#if defined(RAD_ANDROID) || defined(RAD_IOS)
+        // Touch/virtual input writes into UserController's button array, but
+        // dispatch to mappables happens in UserController::Update. Widened
+        // from IsConnected() so the update runs with no physical pad too.
+        if(mControllerArray[i].IsInputAvailable())
+#else
         if(mControllerArray[i].IsConnected())
+#endif
         {
             mControllerArray[i].Update(timeinms);
 
-            if ( mResetEnabled &&
+            if ( mControllerArray[i].IsConnected() &&
+                mResetEnabled &&
                 NUM_RESET_BUTTONS > 0 &&
                 !resetting &&
                 mControllerArray[i].GetInputValueRT( RESET_BUTTONS[ 0 ] ) > 0.5f &&
@@ -570,6 +578,21 @@ void InputManager::EnumerateControllers( void )
 #ifdef RAD_TVOS
                 printf( "[InputManager]   Controller at '%s' is NOT connected\n", szLocation );
                 fflush( stdout );
+#endif
+#if defined(RAD_IOS)
+                // No physical pad: still bind the (disconnected) pad-0
+                // controller object so button names and mappings exist for
+                // the touch input adapter's virtual inputs
+                // (UserController::GetIdByName is empty otherwise and every
+                // touch action silently fails to resolve). NotifyDisconnect
+                // keeps gamepad-detection state honest, so the touch HUD is
+                // not suppressed.
+                if ( xIC2 != NULL )
+                {
+                    controller->Initialize( xIC2 );
+                    controller->LoadControllerMappings( );
+                    xIC2 = NULL;
+                }
 #endif
                 controller->NotifyDisconnect( );
             }

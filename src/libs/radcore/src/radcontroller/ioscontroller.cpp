@@ -868,6 +868,16 @@ class radControllerSystemIos
             }
         }
 
+        // Always expose a pad-0 controller object even with no physical pad
+        // connected. The touch input adapter resolves button names/indices
+        // through UserController::Initialize(), which needs a real
+        // IRadController to enumerate input points. IsConnected() still
+        // reports live pad state, so this does not fake a gamepad.
+        if ( GetControllerForPadIndex( 0 ) == NULL )
+        {
+            CreateControllerForPadIndex( 0 );
+        }
+
         SetCaptureRate( 10 );
         MapVirtualTime( 0, 0 );
         SetBufferTime( 0 );
