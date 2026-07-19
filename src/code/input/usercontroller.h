@@ -57,9 +57,20 @@ public:
     int GetPlayerIndex( void ) const { return m_iPlayerIndex; }
 
     // connection status
-    bool IsConnected( void ) const { return m_bConnected; } 
+    bool IsConnected( void ) const { return m_bConnected; }
     void NotifyConnect( void );
     void NotifyDisconnect( void );
+
+    // Virtual input support, ported from Carlox33/The-Simpsons-Hit-and-Run-Android.
+    // Used by the touch control subsystem (code/input/touch/touchinputadapter.cpp)
+    // to inject button/axis values into this controller's normal update path,
+    // the same way a physical controller's radController input points would.
+    void SetVirtualInputAvailable( bool available );
+    bool IsVirtualInputAvailable( void ) const;
+    bool IsInputAvailable( void ) const;
+
+    void SetVirtualInputValue( unsigned int index, float value, bool forceChange = false );
+    void ClearVirtualInputs( void );
 
     // Returns the value stored by input point at index.
     float GetInputValue( unsigned int index ) const;
@@ -112,6 +123,15 @@ protected:
 	int m_controllerId;
 
     bool m_bConnected;
+
+    // True when touch/virtual input is available even if no physical
+    // controller is connected.
+    bool mVirtualInputAvailable;
+
+    // Tracks which physical input slots were written by virtual input, so
+    // they can be cleared safely without blindly resetting the whole
+    // controller state.
+    bool mVirtualInputActive[ Input::MaxPhysicalButtons ];
 
     Mappable* mMappable[ Input::MaxMappables ];
     bool mbInputPointsRegistered;

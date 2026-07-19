@@ -129,6 +129,7 @@ m_iPlayerIndex( -1 ),
 m_xIController2( NULL ),
 m_controllerId( -1 ),
 m_bConnected( false ),
+mVirtualInputAvailable( false ),
 mbInputPointsRegistered( false ),
 mGameState( Input::ACTIVE_ALL ),
 mbIsRumbleOn( false )
@@ -137,6 +138,11 @@ mbIsRumbleOn( false )
     for ( i = 0; i < Input::MaxMappables; i++ )
     {
         this->mMappable[ i ] = 0;
+    }
+
+    for ( i = 0; i < Input::MaxPhysicalButtons; i++ )
+    {
+        mVirtualInputActive[ i ] = false;
     }
 
 #if defined(RAD_PS2) || defined(RAD_GAMECUBE)
@@ -167,6 +173,51 @@ void UserController::NotifyDisconnect( void )
         {
             if (mMappable[ i ])
                 mMappable[ i ]->OnControllerDisconnect( GetControllerId( ) );
+        }
+    }
+}
+
+void UserController::SetVirtualInputAvailable( bool available )
+{
+    mVirtualInputAvailable = available;
+}
+
+bool UserController::IsVirtualInputAvailable( void ) const
+{
+    return mVirtualInputAvailable;
+}
+
+bool UserController::IsInputAvailable( void ) const
+{
+    return IsConnected() || IsVirtualInputAvailable();
+}
+
+void UserController::SetVirtualInputValue( unsigned int index, float value, bool forceChange )
+{
+    if ( index >= Input::MaxPhysicalButtons )
+    {
+        return;
+    }
+
+    mButtonArray[ index ].SetValue( value );
+
+    if ( forceChange )
+    {
+        mButtonArray[ index ].ForceChange();
+    }
+
+    mVirtualInputActive[ index ] = ( value != 0.0f );
+}
+
+void UserController::ClearVirtualInputs( void )
+{
+    for ( unsigned int i = 0; i < Input::MaxPhysicalButtons; i++ )
+    {
+        if ( mVirtualInputActive[ i ] )
+        {
+            mButtonArray[ i ].SetValue( 0.0f );
+            mButtonArray[ i ].ForceChange();
+            mVirtualInputActive[ i ] = false;
         }
     }
 }
@@ -519,7 +570,11 @@ void UserController::ApplyDynaEffect( RumbleEffect::DynaEffect effect, unsigned 
 
 void UserController::Update( unsigned timeins )
 {
-    if(!IsConnected())
+    // Was !IsConnected() -- widened to !IsInputAvailable() so touch/virtual
+    // input keeps this controller updating even with no physical controller
+    // connected (IsInputAvailable() == IsConnected() unchanged on platforms
+    // that never call SetVirtualInputAvailable(true)).
+    if(!IsInputAvailable())
         return;
 
 #ifdef CONTROLLER_DEBUG
