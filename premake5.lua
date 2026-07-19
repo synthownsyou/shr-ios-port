@@ -431,7 +431,12 @@ project "SRR2"
     }
 
     includedirs(COMMON_INCLUDES)
-    sysincludedirs(SYSTEM_INCLUDES)
+    -- NOTE: sysincludedirs() is not a real premake-core API (verified against
+    -- the official v5.0.0-beta8 release binary -- 0 occurrences of the string
+    -- anywhere in it, vs 73 for the real includedirs()). It's redundant here
+    -- anyway: SYSTEM_HEADER_SEARCH_PATHS is set directly via xcodebuildsettings
+    -- below, which is what actually reaches the generated Xcode project.
+    includedirs(SYSTEM_INCLUDES)
 
     defines(IOS_DEFINES)
 
