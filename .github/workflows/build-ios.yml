@@ -90,6 +90,15 @@ jobs:
             's/std::ranges::fill(mPrevSamples | std::views::join, 0.0f);/for(auto \&mps_sub : mPrevSamples) std::ranges::fill(mps_sub, 0.0f);/' \
             /tmp/openal-src/core/voice.cpp
           grep -n "mPrevSamples" /tmp/openal-src/core/voice.cpp | head -3
+          # al/source.cpp aggregate-initializes PairStruct{lambda, lambda}
+          # relying on C++20 aggregate CTAD, which this Clang rejects ("no
+          # viable constructor or deduction guide"). Append an explicit
+          # deduction guide (C++17 feature, fine here) right after the struct
+          # definition -- covers every CTAD use of PairStruct in the TU.
+          sed -i '' \
+            's|struct PairStruct { T First; U Second; };|struct PairStruct { T First; U Second; }; template<typename T2, typename U2> PairStruct(T2, U2) -> PairStruct<T2, U2>;|' \
+            /tmp/openal-src/al/source.cpp
+          grep -n "PairStruct" /tmp/openal-src/al/source.cpp | head -3
           cmake -S /tmp/openal-src -B /tmp/openal-build \
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
