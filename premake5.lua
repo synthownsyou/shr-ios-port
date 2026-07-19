@@ -536,6 +536,9 @@ project "SRR2"
         -- Copy touch control HUD icons (committed port art, not game data --
         -- see assets_static/). Loaded by TouchAssetManager at Assets/TheSimpsons/touch_controls.
         "cp -R \"${SRCROOT}/../assets_static/touch_controls\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons/\"",
+        -- Copy app icon PNGs to the bundle root (referenced by CFBundleIcons in
+        -- Info.plist -- loose-file scheme, no asset catalog needed for sideload).
+        "cp \"${SRCROOT}/../assets_static/appicon/\"*.png \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/\"",
         -- Copy scripts folder
         "cp -R \"${SRCROOT}/../assets/scripts\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons/\"",
         -- Copy movies folder
