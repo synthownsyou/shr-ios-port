@@ -29,6 +29,29 @@ jobs:
           ./premake5 --version
           echo "PREMAKE5=$(pwd)/premake5" >> "$GITHUB_ENV"
 
+      - name: Rebuild SDL2 for the iOS SDK
+        # third_party/SDL2/lib/libSDL2.a was built by the upstream tvOS port
+        # against appletvos -- the linker refuses to link it into an iOS
+        # target ("building for iOS, but linking in object file built for
+        # tvOS"). Rebuild the same SDL version from source against iphoneos
+        # and overwrite it in place; everything else about third_party/SDL2
+        # (headers, third_party/SDL2 dir layout) stays as-is.
+        run: |
+          SDL_VERSION=release-2.32.10
+          git clone --depth 1 --branch "$SDL_VERSION" https://github.com/libsdl-org/SDL.git /tmp/SDL2-src
+          cmake -S /tmp/SDL2-src -B /tmp/SDL2-build \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DSDL_SHARED=OFF \
+            -DSDL_STATIC=ON
+          cmake --build /tmp/SDL2-build --config Release --target SDL2-static -- -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+          find /tmp/SDL2-build -name "libSDL2.a"
+          cp "$(find /tmp/SDL2-build -name 'libSDL2.a' | head -1)" third_party/SDL2/lib/libSDL2.a
+          file third_party/SDL2/lib/libSDL2.a
+
       - name: Create placeholder game assets
         # No game assets are stored in this repo (personal/educational port,
         # user extracts their own from a legitimately owned copy -- see
