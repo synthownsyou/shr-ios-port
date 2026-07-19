@@ -13,6 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache rebuilt third_party static libs
+        # The SDL2/libpng/OpenAL rebuilds below cost ~10 min per run and only
+        # change when a version or patch in this workflow changes -- bump the
+        # rev suffix in the key when touching any of those steps.
+        id: libcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party/SDL2/lib/libSDL2.a
+            third_party/libpng/lib/libpng16.a
+            third_party/OpenALSoft/lib/libopenal.a
+          key: ios-libs-sdl2.32.10-png1.6.53-openal1.25.0-rev1
+
       - name: Show toolchain versions
         run: |
           xcodebuild -version
@@ -30,6 +43,7 @@ jobs:
           echo "PREMAKE5=$(pwd)/premake5" >> "$GITHUB_ENV"
 
       - name: Rebuild SDL2 for the iOS SDK
+        if: steps.libcache.outputs.cache-hit != 'true'
         # third_party/SDL2/lib/libSDL2.a was built by the upstream tvOS port
         # against appletvos -- the linker refuses to link it into an iOS
         # target ("building for iOS, but linking in object file built for
@@ -53,6 +67,7 @@ jobs:
           file third_party/SDL2/lib/libSDL2.a
 
       - name: Rebuild libpng for the iOS SDK
+        if: steps.libcache.outputs.cache-hit != 'true'
         # Same issue as SDL2 above: the vendored libpng16.a was built for
         # appletvos. Rebuild it against iphoneos and overwrite it in place.
         run: |
@@ -74,6 +89,7 @@ jobs:
           file third_party/libpng/lib/libpng16.a
 
       - name: Rebuild OpenAL Soft for the iOS SDK
+        if: steps.libcache.outputs.cache-hit != 'true'
         # Same issue as SDL2/libpng above: the vendored libopenal.a was built
         # for appletvos.
         run: |
