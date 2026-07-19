@@ -66,24 +66,13 @@ jobs:
             # Find the actual static lib (name varies: libavcodec.a etc.)
             src=$(find ffmpeg-install/lib -name "lib${lib}.a" | head -1)
             cp "$src" "$fw/lib${lib}"
-            cat > "$fw/Info.plist" << PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CFBundleExecutable</key>
-	<string>lib${lib}</string>
-	<key>CFBundleIdentifier</key>
-	<string>org.ffmpeg.lib${lib}</string>
-	<key>CFBundlePackageType</key>
-	<string>FMWK</string>
-	<key>MinimumOSVersion</key>
-	<string>15.0</string>
-	<key>CFBundleSupportedPlatforms</key>
-	<array><string>iPhoneOS</string></array>
-</dict>
-</plist>
-PLIST
+            plutil -create xml1 "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string lib${lib}" "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string org.ffmpeg.lib${lib}" "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string FMWK" "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 15.0" "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" "$fw/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string iPhoneOS" "$fw/Info.plist"
           done
           cp -R ffmpeg-install/include ffmpeg-frameworks/include
           tar -czf ffmpeg-ios-6.1.2-arm64.tar.gz ffmpeg-frameworks
