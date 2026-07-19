@@ -73,6 +73,66 @@ jobs:
           cp "$(find /tmp/libpng-build -name 'libpng16.a' | head -1)" third_party/libpng/lib/libpng16.a
           file third_party/libpng/lib/libpng16.a
 
+      - name: Rebuild OpenAL Soft for the iOS SDK
+        # Same issue as SDL2/libpng above: the vendored libopenal.a was built
+        # for appletvos.
+        run: |
+          AL_VERSION=1.25.0
+          git clone --depth 1 --branch "$AL_VERSION" https://github.com/kcat/openal-soft.git /tmp/openal-src
+          cmake -S /tmp/openal-src -B /tmp/openal-build \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DLIBTYPE=STATIC \
+            -DALSOFT_EXAMPLES=OFF \
+            -DALSOFT_UTILS=OFF \
+            -DALSOFT_TESTS=OFF
+          cmake --build /tmp/openal-build --config Release --target OpenAL -- -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+          find /tmp/openal-build -name "libopenal.a"
+          cp "$(find /tmp/openal-build -name 'libopenal.a' | head -1)" third_party/OpenALSoft/lib/libopenal.a
+          file third_party/OpenALSoft/lib/libopenal.a
+
+      - name: Audit remaining third_party binaries for wrong-platform Mach-O tags
+        # Cheap (~seconds) upfront check so a wrong-SDK-platform library shows
+        # up here instead of costing a full xcodebuild round-trip. platform 2
+        # = iOS, platform 3 = tvOS in Apple's LC_BUILD_VERSION load command.
+        run: |
+          echo "--- static libs ---"
+          find third_party -name "*.a" | while read -r f; do
+            echo "== $f"
+            lipo -info "$f" 2>&1
+            otool -l "$f" 2>/dev/null | grep -A3 "LC_BUILD_VERSION\|LC_VERSION_MIN" | grep -E "platform|cmd " || true
+          done
+          echo "--- frameworks ---"
+          find third_party -path "*.framework" -type d | while read -r fw; do
+            bin="$fw/$(basename "$fw" .framework)"
+            [ -f "$bin" ] || continue
+            echo "== $bin"
+            lipo -info "$bin" 2>&1
+            otool -l "$bin" 2>/dev/null | grep -A3 "LC_BUILD_VERSION\|LC_VERSION_MIN" | grep -E "platform|cmd " || true
+          done
+
+      - name: Fetch prebuilt iOS FFmpeg (from build-ffmpeg-ios.yml release, if published yet)
+        # The vendored third_party/ffmpeg/*.framework binaries are tvOS-tagged
+        # (same issue as SDL2/libpng/OpenAL above), and FFmpeg is too slow to
+        # cross-compile on every push -- see build-ffmpeg-ios.yml, which
+        # builds it once and publishes a release asset. Until that's run at
+        # least once, this step finds nothing and the FFmpeg link error below
+        # is expected -- everything else in this job still validates fine.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        continue-on-error: true
+        run: |
+          gh release download ffmpeg-ios-6.1.2-arm64 --repo "$GITHUB_REPOSITORY" -p "*.tar.gz" -O ffmpeg-ios.tar.gz \
+            && tar -xzf ffmpeg-ios.tar.gz \
+            && for lib in avcodec avformat avutil swresample swscale; do
+                 cp "ffmpeg-frameworks/lib${lib}.framework/lib${lib}" "third_party/ffmpeg/lib${lib}.framework/lib${lib}"
+               done \
+            && echo "Replaced vendored FFmpeg with the iOS-built release asset." \
+            || echo "No ffmpeg-ios-6.1.2-arm64 release found yet -- run build-ffmpeg-ios.yml once first. Continuing with the (tvOS-tagged) vendored copy."
+
       - name: Create placeholder game assets
         # No game assets are stored in this repo (personal/educational port,
         # user extracts their own from a legitimately owned copy -- see

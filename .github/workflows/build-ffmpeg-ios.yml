@@ -1,0 +1,107 @@
+name: Build FFmpeg 6.1 for iOS (one-off, manual)
+
+# This is NOT part of the per-push build. FFmpeg cross-compiles are slow
+# (tens of minutes) and the result never changes unless FFmpeg version
+# changes -- build once, publish as a release asset, have the main
+# build-ios.yml workflow download it instead of rebuilding every push.
+#
+# Vendored version must match what the game's code was written against:
+# LIBAVCODEC_VERSION_MAJOR=60 / LIBAVFORMAT_VERSION_MAJOR=60 /
+# LIBAVUTIL_VERSION_MAJOR=58 (checked in third_party/ffmpeg/include) = FFmpeg
+# 6.1.x. A different major version (e.g. prebuilt 4.3.x XCFrameworks from
+# other iOS/FFmpeg projects) is very likely ABI/API-incompatible with the
+# vendored headers this code includes -- do not substitute those.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ffmpeg:
+    runs-on: macos-14
+    timeout-minutes: 180
+
+    steps:
+      - name: Install build tools
+        run: brew install nasm
+
+      - name: Fetch FFmpeg 6.1 source
+        run: git clone --depth 1 --branch n6.1.2 https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+
+      - name: Configure and build for iOS device (arm64)
+        # --disable-asm: keeps this a plain C cross-compile (no
+        # gas-preprocessor/asm toolchain wrangling). Costs some decode
+        # performance; the priority here is a correct, buildable ABI match,
+        # not maximum FPS during cutscene playback.
+        working-directory: ffmpeg-src
+        run: |
+          IPHONEOS_SYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          CC="$(xcrun -f clang) -arch arm64 -isysroot $IPHONEOS_SYSROOT -mios-version-min=15.0"
+
+          ./configure \
+            --prefix="$PWD/../ffmpeg-install" \
+            --enable-cross-compile \
+            --target-os=darwin \
+            --arch=arm64 \
+            --cc="$CC" \
+            --sysroot="$IPHONEOS_SYSROOT" \
+            --extra-cflags="-arch arm64 -mios-version-min=15.0" \
+            --extra-ldflags="-arch arm64 -isysroot $IPHONEOS_SYSROOT -mios-version-min=15.0" \
+            --disable-asm \
+            --disable-shared \
+            --enable-static \
+            --disable-programs \
+            --disable-doc \
+            --disable-debug \
+            --enable-pic
+
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Package as .framework bundles (matching the vendored layout)
+        run: |
+          mkdir -p ffmpeg-frameworks
+          for lib in avcodec avformat avutil swresample swscale; do
+            fw="ffmpeg-frameworks/lib${lib}.framework"
+            mkdir -p "$fw"
+            # Find the actual static lib (name varies: libavcodec.a etc.)
+            src=$(find ffmpeg-install/lib -name "lib${lib}.a" | head -1)
+            cp "$src" "$fw/lib${lib}"
+            cat > "$fw/Info.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>lib${lib}</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.ffmpeg.lib${lib}</string>
+	<key>CFBundlePackageType</key>
+	<string>FMWK</string>
+	<key>MinimumOSVersion</key>
+	<string>15.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array><string>iPhoneOS</string></array>
+</dict>
+</plist>
+PLIST
+          done
+          cp -R ffmpeg-install/include ffmpeg-frameworks/include
+          tar -czf ffmpeg-ios-6.1.2-arm64.tar.gz ffmpeg-frameworks
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-ios-6.1.2-arm64
+          path: ffmpeg-ios-6.1.2-arm64.tar.gz
+          retention-days: 90
+
+      - name: Publish as a GitHub Release asset (cached, reused by build-ios.yml)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ffmpeg-ios-6.1.2-arm64 \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "FFmpeg 6.1.2 static libs for iOS (arm64)" \
+            --notes "Built by build-ffmpeg-ios.yml. --disable-asm plain-C build, matches vendored FFmpeg 6.1 headers (avcodec 60/avformat 60/avutil 58)." \
+            ffmpeg-ios-6.1.2-arm64.tar.gz \
+            || gh release upload ffmpeg-ios-6.1.2-arm64 ffmpeg-ios-6.1.2-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
