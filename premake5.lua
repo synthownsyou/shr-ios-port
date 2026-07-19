@@ -533,6 +533,9 @@ project "SRR2"
         "mkdir -p \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons\"",
         -- Copy art folder
         "cp -R \"${SRCROOT}/../assets/art\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons/\"",
+        -- Copy touch control HUD icons (committed port art, not game data --
+        -- see assets_static/). Loaded by TouchAssetManager at Assets/TheSimpsons/touch_controls.
+        "cp -R \"${SRCROOT}/../assets_static/touch_controls\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons/\"",
         -- Copy scripts folder
         "cp -R \"${SRCROOT}/../assets/scripts\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons/\"",
         -- Copy movies folder

@@ -15,6 +15,12 @@
 #define TOUCH_ASSET_MANAGER_LOG_TAG "SimpsonsHitAndRun"
 #define TOUCH_ASSET_MANAGER_LOGI(...) __android_log_print(ANDROID_LOG_INFO, TOUCH_ASSET_MANAGER_LOG_TAG, __VA_ARGS__)
 #define TOUCH_ASSET_MANAGER_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TOUCH_ASSET_MANAGER_LOG_TAG, __VA_ARGS__)
+#elif defined(RAD_IOS)
+// iOS reuses the Android load path; only the asset root differs (app bundle
+// instead of APK external storage). SDL gives us the bundle resource path.
+#include <SDL.h>
+#define TOUCH_ASSET_MANAGER_LOGI(...)
+#define TOUCH_ASSET_MANAGER_LOGE(...)
 #else
 #define TOUCH_ASSET_MANAGER_LOGI(...)
 #define TOUCH_ASSET_MANAGER_LOGE(...)
@@ -58,7 +64,7 @@ TouchAssetManager::~TouchAssetManager()
 
 bool TouchAssetManager::LoadAllSprites()
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     return true;
 #else
    bool allLoaded = true;
@@ -254,7 +260,7 @@ allLoaded = LoadSpriteForAsset(
 
 bool TouchAssetManager::LoadSpriteForAsset(TouchAssetId assetId,const char* relativePath,const char* spriteName)
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     (void)assetId;
     (void)relativePath;
     (void)spriteName;
@@ -296,7 +302,7 @@ bool TouchAssetManager::LoadSpriteForAsset(TouchAssetId assetId,const char* rela
 
 bool TouchAssetManager::Initialize()
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     mInitialized = true;
     return true;
 #else
@@ -641,7 +647,32 @@ tSprite* TouchAssetManager::GetSpriteForControl( TouchHudControlId controlId ) c
 
 bool TouchAssetManager::BuildAssetRoot()
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
+    return true;
+#elif defined(RAD_IOS)
+    // On iOS the touch PNGs ship flat inside the app bundle at
+    // Assets/TheSimpsons/touch_controls (see premake5.lua postbuild). SDL's
+    // base path is the bundle resource dir and ends with a trailing slash.
+    char* basePath = SDL_GetBasePath();
+
+    if ( basePath == 0 || basePath[ 0 ] == '\0' )
+    {
+        if ( basePath != 0 )
+        {
+            SDL_free( basePath );
+        }
+        SetLastError( "SDL_GetBasePath returned null/empty." );
+        return false;
+    }
+
+    snprintf(
+        mAssetRoot,
+        sizeof( mAssetRoot ),
+        "%sAssets/TheSimpsons/touch_controls",
+        basePath
+    );
+
+    SDL_free( basePath );
     return true;
 #else
     const char* storagePath = SDL_AndroidGetExternalStoragePath();
@@ -669,7 +700,7 @@ tSprite* TouchAssetManager::LoadSpriteFromFile
     const char* spriteName
 )
 {
-#if !defined(RAD_ANDROID)
+#if !defined(RAD_ANDROID) && !defined(RAD_IOS)
     (void)relativePath;
     (void)spriteName;
     return 0;
