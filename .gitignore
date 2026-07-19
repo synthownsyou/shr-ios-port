@@ -1,0 +1,5 @@
+.DS_Store
+# Premake-generated Xcode project and build output
+/build/
+*.xcodeproj/
+DerivedData/
