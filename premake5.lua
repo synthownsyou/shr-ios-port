@@ -455,6 +455,9 @@ project "SRR2"
         "m",
         "pthread",
         "dl",
+        -- Required by the FFmpeg frameworks (matroska bz2 decode, iconv)
+        "bz2",
+        "iconv",
     }
     
     -- FFmpeg static binaries (linked directly like original project)
@@ -482,6 +485,12 @@ project "SRR2"
         "OpenGLES.framework",
         "QuartzCore.framework",
         "UIKit.framework",
+        -- Required by FFmpeg (videotoolbox codec paths, SecureTransport TLS)
+        "CoreMedia.framework",
+        "VideoToolbox.framework",
+        "Security.framework",
+        -- Required by SDL2 (CMMotionManager in SDL_mfijoystick)
+        "CoreMotion.framework",
     }
     
     -- Weak frameworks
