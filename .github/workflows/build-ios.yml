@@ -52,6 +52,27 @@ jobs:
           cp "$(find /tmp/SDL2-build -name 'libSDL2.a' | head -1)" third_party/SDL2/lib/libSDL2.a
           file third_party/SDL2/lib/libSDL2.a
 
+      - name: Rebuild libpng for the iOS SDK
+        # Same issue as SDL2 above: the vendored libpng16.a was built for
+        # appletvos. Rebuild it against iphoneos and overwrite it in place.
+        run: |
+          PNG_VERSION=v1.6.53
+          git clone --depth 1 --branch "$PNG_VERSION" https://github.com/glennrp/libpng.git /tmp/libpng-src
+          cmake -S /tmp/libpng-src -B /tmp/libpng-build \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DPNG_SHARED=OFF \
+            -DPNG_STATIC=ON \
+            -DPNG_TESTS=OFF \
+            -DPNG_TOOLS=OFF
+          cmake --build /tmp/libpng-build --config Release --target png_static -- -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+          find /tmp/libpng-build -name "libpng16.a"
+          cp "$(find /tmp/libpng-build -name 'libpng16.a' | head -1)" third_party/libpng/lib/libpng16.a
+          file third_party/libpng/lib/libpng16.a
+
       - name: Create placeholder game assets
         # No game assets are stored in this repo (personal/educational port,
         # user extracts their own from a legitimately owned copy -- see
