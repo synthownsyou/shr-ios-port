@@ -1,0 +1,108 @@
+name: Build iOS port
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain versions
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: Install premake5
+        run: brew install premake
+
+      - name: Create placeholder game assets
+        # No game assets are stored in this repo (personal/educational port,
+        # user extracts their own from a legitimately owned copy -- see
+        # PORTING-NOTES.md). premake5.lua's postbuildcommands `cp -R` real
+        # asset folders into the app bundle; without *something* there the
+        # copy step fails before we even find out whether the C++/Obj-C++
+        # compiled. These placeholders exist only so CI can validate
+        # compilation and linking -- the resulting .app will not run/play.
+        run: |
+          mkdir -p assets/art assets/scripts assets/movies assets/sound
+          touch assets/art/.keep assets/scripts/.keep assets/movies/.keep assets/sound/.keep
+          for f in ambience carsound dialog music00 music01 music02 music03 nis scripts; do
+            touch "assets/${f}.rcf"
+          done
+
+      - name: Generate Xcode project
+        run: premake5 xcode4
+
+      - name: List generated project and targets (debug aid)
+        run: |
+          find build -maxdepth 2
+          xcodebuild -project build/SRR2.xcodeproj -list || true
+
+      # NOTE: third_party/{SDL2,libpng,OpenALSoft,ffmpeg} are prebuilt
+      # single-platform binaries (no .xcframework slices found), almost
+      # certainly built for the iphoneos/appletvos *device* SDK only. This
+      # simulator build will very likely compile the C++ fine and then fail
+      # at the link step (wrong SDK/platform for these .a/.framework files).
+      # Kept anyway (continue-on-error) because a compile-only failure here
+      # still tells us the source is syntactically sound; the iphoneos device
+      # build below is the one that actually matters.
+      - name: Build for iOS Simulator (no signing required, may fail to link -- see note above)
+        id: sim_build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project build/SRR2.xcodeproj \
+            -target SRR2 \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee simulator-build.log
+
+      - name: Build for iOS device SDK (unsigned -- validates against real SDK, not installable as-is)
+        id: device_build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project build/SRR2.xcodeproj \
+            -target SRR2 \
+            -configuration Debug \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee device-build.log
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            simulator-build.log
+            device-build.log
+          retention-days: 14
+
+      - name: Upload built .app bundles (unsigned -- not installable without your own signing)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-app-bundles
+          path: |
+            build/**/*.app
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Fail job if both builds failed
+        if: steps.sim_build.outcome != 'success' && steps.device_build.outcome != 'success'
+        run: |
+          echo "Both builds failed -- see build-logs artifact for the actual compiler/linker errors."
+          exit 1
