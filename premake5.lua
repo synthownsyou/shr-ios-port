@@ -524,19 +524,11 @@ project "SRR2"
     -- radTvosGetAppRoot -- shared Apple-platform file, see PORTING-NOTES.md).
     -- Assets are in local assets/ folder (self-contained project)
     postbuildcommands {
-        -- Create Frameworks folder and embed FFmpeg dynamic frameworks
-        "mkdir -p \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"",
-        "rsync -a \"$SRCROOT/../third_party/ffmpeg/libavcodec.framework\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/\"",
-        "rsync -a \"$SRCROOT/../third_party/ffmpeg/libavformat.framework\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/\"",
-        "rsync -a \"$SRCROOT/../third_party/ffmpeg/libavutil.framework\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/\"",
-        "rsync -a \"$SRCROOT/../third_party/ffmpeg/libswresample.framework\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/\"",
-        "rsync -a \"$SRCROOT/../third_party/ffmpeg/libswscale.framework\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/\"",
-        -- Code sign each FFmpeg framework
-        "if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libavcodec.framework\"; fi",
-        "if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libavformat.framework\"; fi",
-        "if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libavutil.framework\"; fi",
-        "if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libswresample.framework\"; fi",
-        "if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libswscale.framework\"; fi",
+        -- NOTE: the third_party/ffmpeg "*.framework" bundles hold STATIC
+        -- archives (ar), not dylibs -- they're fully linked into the SRR2
+        -- binary via linkoptions above. Embedding them in Frameworks/ used
+        -- to break sideloading tools, which try to codesign each framework
+        -- and choke on a non-Mach-O ar archive. Nothing to embed.
         -- Copy game assets to app bundle
         "mkdir -p \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Assets/TheSimpsons\"",
         -- Copy art folder
