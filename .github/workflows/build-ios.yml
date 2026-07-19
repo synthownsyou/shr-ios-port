@@ -180,7 +180,7 @@ jobs:
         run: |
           mkdir -p assets/art assets/scripts assets/movies assets/sound
           touch assets/art/.keep assets/scripts/.keep assets/movies/.keep assets/sound/.keep
-          for f in ambience carsound dialog music00 music01 music02 music03 nis scripts; do
+          for f in ambience carsound dialog music00 music01 music02 music03 nis scripts soundfx; do
             touch "assets/${f}.rcf"
           done
 
