@@ -20,11 +20,8 @@ jobs:
           xcrun --sdk iphonesimulator --show-sdk-version
 
       - name: Install premake5
-        # The runner appears to have some premake5 already earlier on PATH
-        # that lacks sysincludedirs() (added in the 5.0.0 betas), which
-        # premake5.lua uses -- fetch the official release binary into the
-        # workspace itself and always invoke it by absolute path below,
-        # rather than relying on PATH ordering.
+        # Fetch the official release binary directly (rather than trust
+        # whatever Homebrew resolves) for a known, reproducible version.
         run: |
           curl -L -o premake5.tar.gz https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-macosx.tar.gz
           tar -xzf premake5.tar.gz
