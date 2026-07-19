@@ -79,6 +79,22 @@ jobs:
         run: |
           AL_VERSION=1.25.0
           git clone --depth 1 --branch "$AL_VERSION" https://github.com/kcat/openal-soft.git /tmp/openal-src
+          # std::views::join is missing from Xcode 15.4's libc++ entirely and
+          # OpenAL Soft 1.25.0 uses it in ~15 files (plus views::join_with in
+          # al/debug.cpp) -- far too many call sites to sed-patch one by one.
+          # The macos-14 runner image also ships Xcode 16.x, whose libc++ has
+          # all of these; use it for THIS step only via DEVELOPER_DIR. The
+          # resulting static lib links fine into the Xcode 15.4-built app
+          # (libc++ is ABI-stable; at worst the linker warns the .a targets a
+          # newer iOS SDK than it's linked against).
+          ls -d /Applications/Xcode*.app
+          XC16=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XC16" ]; then
+            echo "No Xcode 16.x on this runner image -- views::join patches below will not be enough."
+            exit 1
+          fi
+          export DEVELOPER_DIR="$XC16/Contents/Developer"
+          xcodebuild -version
           # OpenAL Soft 1.25.0's voice.cpp uses std::views::join (C++20
           # ranges). Bumping the deployment target to 17.0 didn't help --
           # this runner's Xcode 15.4 / iPhoneOS17.5 SDK libc++ doesn't expose
