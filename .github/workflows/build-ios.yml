@@ -79,19 +79,23 @@ jobs:
         run: |
           AL_VERSION=1.25.0
           git clone --depth 1 --branch "$AL_VERSION" https://github.com/kcat/openal-soft.git /tmp/openal-src
-          # Deployment target 17.0 here on purpose: OpenAL Soft 1.25.0 uses
-          # std::views::join (C++20 ranges), whose libc++ availability on
-          # Apple platforms is gated by deployment target and isn't exposed
-          # at 15.0. A static lib built against a newer target still links
-          # fine into an app whose own IPHONEOS_DEPLOYMENT_TARGET is lower
-          # (15.0, see premake5.lua) as long as it doesn't call newer runtime
-          # APIs -- this is a pure-C++ audio library, it doesn't.
+          # OpenAL Soft 1.25.0's voice.cpp uses std::views::join (C++20
+          # ranges). Bumping the deployment target to 17.0 didn't help --
+          # this runner's Xcode 15.4 / iPhoneOS17.5 SDK libc++ doesn't expose
+          # it at any iOS deployment target, only a newer Xcode would. Patch
+          # the one call site instead of chasing SDK/Xcode versions: it just
+          # flattens mPrevSamples (a range-of-ranges) and zero-fills it,
+          # equivalent to a plain nested loop.
+          sed -i '' \
+            's/std::ranges::fill(mPrevSamples | std::views::join, 0.0f);/for(auto \&mps_sub : mPrevSamples) std::ranges::fill(mps_sub, 0.0f);/' \
+            /tmp/openal-src/core/voice.cpp
+          grep -n "mPrevSamples" /tmp/openal-src/core/voice.cpp | head -3
           cmake -S /tmp/openal-src -B /tmp/openal-build \
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
             -DLIBTYPE=STATIC \
             -DALSOFT_EXAMPLES=OFF \
             -DALSOFT_UTILS=OFF \
