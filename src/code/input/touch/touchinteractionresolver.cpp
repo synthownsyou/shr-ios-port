@@ -6,7 +6,7 @@
 
 #include <ai/actionbuttonhandler.h>
 
-#if defined(RAD_ANDROID) || defined(RAD_IOS)
+#if defined(RAD_ANDROID)
 #include <android/log.h>
 
 #define TOUCH_INTERACTION_LOG_TAG "SimpsonsHitAndRun"

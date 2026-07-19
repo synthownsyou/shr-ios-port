@@ -9,7 +9,7 @@
 #include <pddi/pddi.hpp>
 #include <math.h>
 #include <input/touch/touchcontrolsconfigurationmanager.h>
-#if defined(RAD_ANDROID) || defined(RAD_IOS)
+#if defined(RAD_ANDROID)
 #include <android/log.h>
 
 #define TOUCH_HUD_RENDERER_LOG_TAG "SimpsonsHitAndRun"
