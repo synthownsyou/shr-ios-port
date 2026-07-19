@@ -255,6 +255,28 @@ jobs:
             device-build.log
           retention-days: 14
 
+      - name: Package unsigned .ipa from the device build
+        # Plain zip with the .app under Payload/ -- the exact layout signing
+        # tools (AltStore, Sideloadly, etc.) expect. Unsigned: sign it with
+        # your own Apple ID at install time.
+        if: steps.device_build.outcome == 'success'
+        run: |
+          APP=$(find build -name "SRR2.app" -path "*iphoneos*" -o -name "SRR2.app" -path "*Debug*" | head -1)
+          echo "Packaging $APP"
+          rm -rf /tmp/ipa && mkdir -p /tmp/ipa/Payload
+          cp -R "$APP" /tmp/ipa/Payload/
+          (cd /tmp/ipa && zip -qry SRR2-unsigned.ipa Payload)
+          mv /tmp/ipa/SRR2-unsigned.ipa .
+          ls -lh SRR2-unsigned.ipa
+
+      - name: Upload unsigned .ipa
+        if: steps.device_build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SRR2-unsigned-ipa
+          path: SRR2-unsigned.ipa
+          retention-days: 14
+
       - name: Upload built .app bundles (unsigned -- not installable without your own signing)
         if: always()
         uses: actions/upload-artifact@v4
