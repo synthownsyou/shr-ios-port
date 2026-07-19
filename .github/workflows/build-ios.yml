@@ -20,7 +20,16 @@ jobs:
           xcrun --sdk iphonesimulator --show-sdk-version
 
       - name: Install premake5
-        run: brew install premake
+        # Homebrew's "premake" formula on the runner resolved to a version
+        # too old to have sysincludedirs() (added in the 5.0.0 betas), which
+        # premake5.lua uses -- fetch the official release binary directly
+        # instead, for a known-good, reproducible version.
+        run: |
+          curl -L -o premake5.tar.gz https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-macosx.tar.gz
+          tar -xzf premake5.tar.gz
+          chmod +x premake5
+          sudo mv premake5 /usr/local/bin/premake5
+          premake5 --version
 
       - name: Create placeholder game assets
         # No game assets are stored in this repo (personal/educational port,
