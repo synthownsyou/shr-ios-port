@@ -562,7 +562,10 @@ project "SRR2"
         symbols "Off"
         optimize "Speed"
         defines { "NDEBUG" }
-        flags { "LinkTimeOptimization" }
+        -- NOTE: flags{"LinkTimeOptimization"} was rejected by premake5
+        -- v5.0.0-beta8 ("invalid value 'LinkTimeOptimization' for flags" --
+        -- that flags value was removed/renamed upstream). Redundant anyway:
+        -- LLVM_LTO below sets the same thing directly on the Xcode target.
         xcodebuildsettings {
             ["GCC_OPTIMIZATION_LEVEL"] = "3",
             ["LLVM_LTO"] = "YES",
