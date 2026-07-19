@@ -79,12 +79,19 @@ jobs:
         run: |
           AL_VERSION=1.25.0
           git clone --depth 1 --branch "$AL_VERSION" https://github.com/kcat/openal-soft.git /tmp/openal-src
+          # Deployment target 17.0 here on purpose: OpenAL Soft 1.25.0 uses
+          # std::views::join (C++20 ranges), whose libc++ availability on
+          # Apple platforms is gated by deployment target and isn't exposed
+          # at 15.0. A static lib built against a newer target still links
+          # fine into an app whose own IPHONEOS_DEPLOYMENT_TARGET is lower
+          # (15.0, see premake5.lua) as long as it doesn't call newer runtime
+          # APIs -- this is a pure-C++ audio library, it doesn't.
           cmake -S /tmp/openal-src -B /tmp/openal-build \
             -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
             -DLIBTYPE=STATIC \
             -DALSOFT_EXAMPLES=OFF \
             -DALSOFT_UTILS=OFF \
