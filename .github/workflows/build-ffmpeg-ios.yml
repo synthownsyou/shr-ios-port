@@ -52,6 +52,8 @@ jobs:
             --disable-programs \
             --disable-doc \
             --disable-debug \
+            --disable-avdevice \
+            --disable-avfilter \
             --enable-pic
 
           make -j$(sysctl -n hw.ncpu)
