@@ -15,6 +15,9 @@ name: Build FFmpeg 6.1 for iOS (one-off, manual)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write  # needed for `gh release create` in the publish step
+
 jobs:
   build-ffmpeg:
     runs-on: macos-14
