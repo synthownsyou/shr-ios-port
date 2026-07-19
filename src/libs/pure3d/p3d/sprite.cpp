@@ -636,6 +636,110 @@ void tSprite::Display()
     }
 }
 
+void tSprite::DisplayAt( float x, float y, float displayWidth, float displayHeight )
+{
+    if( displayWidth <= 0.0f || displayHeight <= 0.0f )
+    {
+        return;
+    }
+
+    if( width <= 0 || height <= 0 )
+    {
+        return;
+    }
+
+    float nearPlane = 0.0f;
+    float farPlane = 0.0f;
+    float fov = 0.0f;
+    float aspect = 0.0f;
+
+    p3d::pddi->GetCamera( &nearPlane, &farPlane, &fov, &aspect );
+
+    const float z = nearPlane + 0.0001f;
+
+    for( int i = 0; i < nPolys; i++ )
+    {
+        const sprVertex* src = &polys[ i * 4 ];
+
+        float minX = src[ 0 ].v.x;
+        float maxX = src[ 0 ].v.x;
+        float minY = src[ 0 ].v.y;
+        float maxY = src[ 0 ].v.y;
+
+        for( int v = 1; v < 4; ++v )
+        {
+            if( src[ v ].v.x < minX )
+            {
+                minX = src[ v ].v.x;
+            }
+
+            if( src[ v ].v.x > maxX )
+            {
+                maxX = src[ v ].v.x;
+            }
+
+            if( src[ v ].v.y < minY )
+            {
+                minY = src[ v ].v.y;
+            }
+
+            if( src[ v ].v.y > maxY )
+            {
+                maxY = src[ v ].v.y;
+            }
+        }
+
+        const float srcLeftPixels = minX / scaleX;
+        const float srcRightPixels = maxX / scaleX;
+
+        const float srcTopPixels = static_cast<float>( height ) - ( maxY / scaleY );
+        const float srcBottomPixels = static_cast<float>( height ) - ( minY / scaleY );
+
+        const float left = x + ( srcLeftPixels / static_cast<float>( width ) ) * displayWidth;
+        const float right = x + ( srcRightPixels / static_cast<float>( width ) ) * displayWidth;
+
+        const float top = y + ( srcTopPixels / static_cast<float>( height ) ) * displayHeight;
+        const float bottom = y + ( srcBottomPixels / static_cast<float>( height ) ) * displayHeight;
+
+        sprVertex quad[ 4 ];
+
+        quad[ 0 ].v.Set( right, bottom, z );
+        quad[ 0 ].c = src[ 0 ].c;
+        quad[ 0 ].uv0 = src[ 0 ].uv0;
+
+        quad[ 1 ].v.Set( left, bottom, z );
+        quad[ 1 ].c = src[ 1 ].c;
+        quad[ 1 ].uv0 = src[ 1 ].uv0;
+
+        quad[ 2 ].v.Set( right, top, z );
+        quad[ 2 ].c = src[ 2 ].c;
+        quad[ 2 ].uv0 = src[ 2 ].uv0;
+
+        quad[ 3 ].v.Set( left, top, z );
+        quad[ 3 ].c = src[ 3 ].c;
+        quad[ 3 ].uv0 = src[ 3 ].uv0;
+
+        Shader->GetShader()->SetTexture(
+            PDDI_SP_BASETEX,
+            textures[ i ]->GetTexture()
+        );
+
+        pddiPrimStream* stream = p3d::pddi->BeginPrims(
+            Shader->GetShader(),
+            PDDI_PRIM_TRISTRIP,
+            PDDI_V_CT,
+            4
+        );
+
+        stream->Vertex( &quad[ 0 ].v, quad[ 0 ].c, &quad[ 0 ].uv0 );
+        stream->Vertex( &quad[ 1 ].v, quad[ 1 ].c, &quad[ 1 ].uv0 );
+        stream->Vertex( &quad[ 2 ].v, quad[ 2 ].c, &quad[ 2 ].uv0 );
+        stream->Vertex( &quad[ 3 ].v, quad[ 3 ].c, &quad[ 3 ].uv0 );
+
+        p3d::pddi->EndPrims( stream );
+    }
+}
+
 tSpriteLoader::tSpriteLoader() : tSimpleChunkHandler(Pure3D::Texture::SPRITE)//P3D_SPRITE)
 {
     forceAlphaTest = false;

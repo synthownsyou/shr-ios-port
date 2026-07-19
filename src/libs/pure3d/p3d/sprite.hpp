@@ -40,7 +40,13 @@ public:
 
     void Display();
 
-    int GetNativeX(void); 
+    // Ported from Carlox33/The-Simpsons-Hit-and-Run-Android: re-projects this
+    // sprite's existing quads/textures to an arbitrary screen-space rect, used
+    // by the touch control HUD (code/input/touch/touchhudrenderer.cpp) to lay
+    // out button icons wherever the layout/editor places them.
+    void DisplayAt( float x, float y, float displayWidth, float displayHeight );
+
+    int GetNativeX(void);
     int GetNativeY(void);
 
     int GetHeight(void) {return height; } 
