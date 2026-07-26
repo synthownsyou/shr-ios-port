@@ -152,13 +152,30 @@ copied into the bundle by premake's postbuild — you don't need to fetch those.
 
 ## Credits
 
-- **dxcool222** — the tvOS port this is built on top of.
-- **Carlox33** — the Android touch-control subsystem ported across.
-- **Jveda** — camera controls, UI scaling, and the Lisa's School environment
-  fixes in the upstream tvOS tree (per the original README).
-- **ZenoArrows** and everyone who kept the source tree alive.
-- **Radical Entertainment** — the original engineers who wrote this engine in
-  2003. It still rules.
+This is a **fork** — I stood on the shoulders of several people who did the
+hard work before me. All credit where it's due:
+
+- **dxcool222** — author of [the tvOS (Apple TV) port](https://github.com/dxcool222/The-Simpsons-Hit-and-Run),
+  the direct base of this project. This whole tree is dxcool222's work
+  retargeted from Apple TV to iPhone/iPad. The platform layer, the native
+  GameController backend, the GLES2/EAGL rendering, the sandboxed file I/O,
+  the premake project, the CI shape — all started here.
+- **Jveda** — primary collaborator on the tvOS port per its original README:
+  camera controls, UI/text scaling, and the long grind of fixing Lisa's
+  School environment. Carried forward unchanged into this iOS tree.
+- **Carlox33** — author of [the Android port](https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android).
+  The entire touch-control subsystem (on-screen HUD, SDL2 finger-event input,
+  camera-drag, context/interaction resolvers) and the **touch-control button
+  icons** shipped under `assets_static/touch_controls/` come from this fork.
+  Without Carlox33's work there are no touch controls on iOS, full stop.
+- **ZenoArrows** and the wider community that preserved and circulated the
+  leaked 2003 Radical Entertainment source tree. No source, no port.
+- **Radical Entertainment** — the original engineers who wrote this engine and
+  this game in 2003. Twenty-three years later it still has a community around
+  it because the work was that good. All of this is built on their code.
+
+If I missed anyone, it's an oversight, not a slight — open an issue and I'll
+add you.
 
 ---
 
@@ -169,5 +186,7 @@ expected — a real, buildable, sideloadable iOS port with working touch
 controls — but I'm moving to Android and won't be maintaining this. If you
 pick it up, the highest-leverage thing you can do is **add the launch screen
 and test on a real device**. Everything else flows from that. Good luck.
+
+This project was made by a Brazilian. 🇧🇷
 
 — *cLohan*
