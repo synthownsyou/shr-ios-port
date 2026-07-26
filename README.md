@@ -101,6 +101,11 @@ polish.
 
 ## How to build
 
+> **Just want to play?** Grab `SRR2-unsigned.ipa` from the
+> [latest release](https://github.com/zmodelerlover/shr-ios-port/releases)
+> and follow the **[Asset Injection Guide](ASSET-INJECTION-GUIDE.md)** to add
+> your own game data and sideload. No Mac required.
+
 ### CI (no Mac needed — this is how the `.ipa` is produced)
 
 Push to `main` (or run the workflow manually) and `.github/workflows/build-ios.yml`
