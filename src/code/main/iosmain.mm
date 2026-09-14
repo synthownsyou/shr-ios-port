@@ -89,7 +89,7 @@ static void IOSCreateDebugOverlay()
     });
 }
 
-static void IOSLog(const char* fmt, ...)
+void IOSLog(const char* fmt, ...)
 {
     char buffer[4096];
 
