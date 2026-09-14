@@ -30,6 +30,7 @@
 static void ProcessCommandLineArguments( int argc, char *argv[] );
 static void ProcessCommandLineArgumentsFromFile();
 
+#ifdef RAD_DEBUG
 static NSMutableString* gDebugLog = nil;
 static UITextView* gDebugView = nil;
 static UIWindow* gDebugWindow = nil;
@@ -153,6 +154,11 @@ void IOSLog(const char* fmt, ...)
         });
     }
 }
+#else
+void IOSLog(const char* fmt, ...)
+{
+}
+#endif
 
 int SDL_main( int argc, char *argv[] );
 
@@ -294,9 +300,12 @@ int SDL_main( int argc, char *argv[] )
 
     IOSLog("13 InitializeWindow complete");
 
+#ifdef RAD_DEBUG
 		IOSCreateDebugOverlay();
 
 		IOSLog("13.1 debug overlay created");
+#endif
+
     IOSLog("14 before IosPlatform::InitializeFoundation");
 
     IosPlatform::InitializeFoundation();
