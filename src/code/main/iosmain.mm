@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -31,26 +32,17 @@ static void ProcessCommandLineArgumentsFromFile();
 
 static NSMutableString* gDebugLog = nil;
 static UITextView* gDebugView = nil;
+static UIWindow* gDebugWindow = nil;
 
-static UIWindow* GetDebugWindow()
+static UIWindowScene* GetForegroundWindowScene()
 {
     for (UIScene* scene in UIApplication.sharedApplication.connectedScenes)
     {
         if (scene.activationState != UISceneActivationStateForegroundActive)
             continue;
 
-        if (![scene isKindOfClass:[UIWindowScene class]])
-            continue;
-
-        UIWindowScene* windowScene = (UIWindowScene*)scene;
-        for (UIWindow* window in windowScene.windows)
-        {
-            if (window.isKeyWindow)
-                return window;
-        }
-
-        if (windowScene.windows.count > 0)
-            return windowScene.windows.firstObject;
+        if ([scene isKindOfClass:[UIWindowScene class]])
+            return (UIWindowScene*)scene;
     }
 
     return nil;
@@ -59,35 +51,55 @@ static UIWindow* GetDebugWindow()
 static void IOSCreateDebugOverlay()
 {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (gDebugView != nil)
+        if (gDebugWindow != nil)
             return;
 
-        UIWindow* window = GetDebugWindow();
-        if (window == nil)
+        UIWindowScene* scene = GetForegroundWindowScene();
+        if (scene == nil)
             return;
+
+        gDebugWindow =
+            [[UIWindow alloc] initWithWindowScene:scene];
+
+        gDebugWindow.frame = scene.coordinateSpace.bounds;
+        gDebugWindow.windowLevel = UIWindowLevelAlert + 1000.0;
+
+        UIViewController* controller =
+            [[UIViewController alloc] init];
+
+        controller.view.backgroundColor =
+            [UIColor clearColor];
+
+        gDebugWindow.rootViewController = controller;
 
         gDebugView =
-            [[UITextView alloc] initWithFrame:window.bounds];
+            [[UITextView alloc] initWithFrame:controller.view.bounds];
+
+        gDebugView.autoresizingMask =
+            UIViewAutoresizingFlexibleWidth |
+            UIViewAutoresizingFlexibleHeight;
 
         gDebugView.backgroundColor =
-            [UIColor colorWithWhite:0.0 alpha:0.75];
+            [UIColor colorWithWhite:0.0 alpha:0.72];
 
         gDebugView.textColor = UIColor.greenColor;
+
         gDebugView.font =
-            [UIFont monospacedSystemFontOfSize:11.0
+            [UIFont monospacedSystemFontOfSize:10.0
                                        weight:UIFontWeightRegular];
 
         gDebugView.editable = NO;
         gDebugView.selectable = YES;
-        gDebugView.userInteractionEnabled = YES;
-        gDebugView.autoresizingMask =
-            UIViewAutoresizingFlexibleWidth |
-            UIViewAutoresizingFlexibleHeight;
+
         gDebugView.text = gDebugLog ?: @"";
-        [window addSubview:gDebugView];
-        [window bringSubviewToFront:gDebugView];
+
+        [controller.view addSubview:gDebugView];
+
+        gDebugWindow.hidden = NO;
     });
 }
+
+static CFTimeInterval gLastDebugRefresh = 0.0;
 
 void IOSLog(const char* fmt, ...)
 {
@@ -102,23 +114,42 @@ void IOSLog(const char* fmt, ...)
 
     @autoreleasepool
     {
-        NSString* line =
-            [NSString stringWithFormat:@"%s\n", buffer];
-
         if (gDebugLog == nil)
             gDebugLog = [[NSMutableString alloc] init];
 
+        NSString* line =
+            [NSString stringWithFormat:@"%s\n", buffer];
+
         [gDebugLog appendString:line];
+
+        // Don't allow the in-memory display buffer to grow forever.
+        const NSUInteger maxLength = 30000;
+
+        if (gDebugLog.length > maxLength)
+        {
+            [gDebugLog deleteCharactersInRange:
+                NSMakeRange(0, gDebugLog.length - maxLength)];
+        }
+
+        CFTimeInterval now = CACurrentMediaTime();
+
+        if ((now - gLastDebugRefresh) < 0.05)
+            return;
+
+        gLastDebugRefresh = now;
+
+        NSString* snapshot = [gDebugLog copy];
+
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (gDebugView != nil)
-            {
-                gDebugView.text = gDebugLog;
+            if (gDebugView == nil)
+                return;
 
-                NSRange bottom =
-                    NSMakeRange(gDebugView.text.length, 0);
+            gDebugView.text = snapshot;
 
-                [gDebugView scrollRangeToVisible:bottom];
-            }
+            NSRange bottom =
+                NSMakeRange(gDebugView.text.length, 0);
+
+            [gDebugView scrollRangeToVisible:bottom];
         });
     }
 }
