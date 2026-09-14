@@ -23,6 +23,9 @@ public:
     static void InitializeFoundation();
     static void InitializeMemory();
     static void ShutdownMemory();
+    
+    static void IOSLog(const char* fmt, ...);
+    static void IOSLogPath(const char* label, const char* path);
 
     virtual void InitializePlatform();
     virtual void ShutdownPlatform();
