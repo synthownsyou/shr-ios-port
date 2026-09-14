@@ -65,7 +65,7 @@
 #include <input/touch/touchassetmanager.h>
 #include <input/touch/touchhudrenderer.h>
 #include <input/touch/touchcontrolsconfigurationmanager.h>
-#include <iosplatform.h>
+#include "iosplatform.h"
 #endif
 
 //******************************************************************************
