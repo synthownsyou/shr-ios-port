@@ -765,83 +765,37 @@ const unsigned PROFILE_CHANNEL_LOAD = 3;
 
 void Game::Run()
 {
-    extern bool g_AllowDebugOutput;
-
-#ifdef DEMO_MODE_PROFILER
-    g_AllowDebugOutput = false;
-
-    g_DemoProfiler.AddChannel(0, "All");
-    g_DemoProfiler.AddChannel(1, "Ai");
-    g_DemoProfiler.AddChannel(2, "Render");
-    g_DemoProfiler.AddChannel(3, "Load");
-    g_DemoProfiler.AddChannel(4, "Opaque");
-    g_DemoProfiler.AddChannel(5, "Translucent");
-    g_DemoProfiler.AddChannel(6, "World Sphere");
-    g_DemoProfiler.AddChannel(7, "Anim Entity");
-    g_DemoProfiler.AddChannel(8, "Breakable");
-    g_DemoProfiler.AddChannel(9, "InstAnimDynaPhys");
-    g_DemoProfiler.AddChannel(10, "InstDynaPhys");
-    g_DemoProfiler.AddChannel(11, "InstStat");
-    g_DemoProfiler.AddChannel(12, "InstStatPhys");
-    g_DemoProfiler.AddChannel(13, "Lens Flare");
-    g_DemoProfiler.AddChannel(14, "State Prop");
-    g_DemoProfiler.AddChannel(15, "Static");
-    g_DemoProfiler.AddChannel(16, "Tristrip");
-    g_DemoProfiler.AddChannel(17, "AnimCollision");
-    g_DemoProfiler.AddChannel(18, "Cars");
-    g_DemoProfiler.AddChannel(19, "Characters");
-    g_DemoProfiler.AddChannel(20, "ABH");
-    g_DemoProfiler.AddChannel(21, "Actor");
-    g_DemoProfiler.AddChannel(22, "AnimatedIcon");
-    g_DemoProfiler.AddChannel(23, "ParticleSystem");
-#endif
-
     unsigned time = radTimeGetMilliseconds();
-
     unsigned debugFrame = 0;
 
-    IOSLog("RUN entered");
-    IOSLog("RUN initial time=%u", time);
+    IOSLog("RUN START time=%u", time);
 
     while (!mExitNow)
     {
-        IOSLog("FRAME %u BEGIN", debugFrame);
-
-        DEMOPROFILE(g_DemoProfiler.Start(PROFILE_CHANNEL_ALL);)
-
-        BEGIN_PROFILER_FRAME();
-        BEGIN_PROFILE("GameLoop")
-
-        unsigned newTime = radTimeGetMilliseconds();
-        unsigned elapsed = newTime - time;
+        const unsigned newTime = radTimeGetMilliseconds();
+        const unsigned elapsed = newTime - time;
         time = newTime;
 
         IOSLog(
-            "FRAME %u timing newTime=%u elapsed=%u",
+            "F%u BEGIN dt=%u ctx=%d",
             debugFrame,
-            newTime,
-            elapsed
+            elapsed,
+            (int)mpGameFlow->GetCurrentContext()
         );
 
 #if defined(RAD_ANDROID) || defined(RAD_IOS)
 
-        IOSLog("FRAME %u before UpdateTouchContextResolverFromGame", debugFrame);
+        IOSLog("F%u TOUCH begin", debugFrame);
+
         UpdateTouchContextResolverFromGame();
-        IOSLog("FRAME %u after UpdateTouchContextResolverFromGame", debugFrame);
-
-        IOSLog("FRAME %u before TouchHudSystem::Update", debugFrame);
         TouchHudSystem::GetInstance().Update(elapsed);
-        IOSLog("FRAME %u after TouchHudSystem::Update", debugFrame);
-
-        IOSLog("FRAME %u before TouchInputModeManager::Update", debugFrame);
         TouchInputModeManager::GetInstance().Update(elapsed);
-        IOSLog("FRAME %u after TouchInputModeManager::Update", debugFrame);
+
+        IOSLog("F%u TOUCH end", debugFrame);
 
 #endif
 
 #ifdef RAD_SDL_PLATFORM
-
-        IOSLog("FRAME %u before SDL event loop", debugFrame);
 
         SDL_Event msg;
         unsigned eventCount = 0;
@@ -850,148 +804,149 @@ void Game::Run()
         {
             ++eventCount;
 
-            IOSLog(
-                "FRAME %u SDL event %u type=%u",
-                debugFrame,
-                eventCount,
-                (unsigned)msg.type
-            );
-
 #if defined(RAD_ANDROID) || defined(RAD_IOS)
-
-            IOSLog("FRAME %u before UpdateTouchInputModeFromSDLEvent", debugFrame);
             UpdateTouchInputModeFromSDLEvent(msg);
-            IOSLog("FRAME %u after UpdateTouchInputModeFromSDLEvent", debugFrame);
-
-            IOSLog("FRAME %u before UpdateTouchHudSystemFromSDLEvent", debugFrame);
             UpdateTouchHudSystemFromSDLEvent(msg);
-            IOSLog("FRAME %u after UpdateTouchHudSystemFromSDLEvent", debugFrame);
-
 #endif
 
             if (msg.type == SDL_QUIT)
             {
-                IOSLog("FRAME %u SDL_QUIT received", debugFrame);
+                IOSLog(
+                    "F%u SDL_QUIT ctx=%d",
+                    debugFrame,
+                    (int)GetGameFlow()->GetCurrentContext()
+                );
 
                 if (GetGameFlow()->GetCurrentContext() != CONTEXT_FRONTEND &&
                     GetGameFlow()->GetCurrentContext() != CONTEXT_GAMEPLAY &&
                     GetGameFlow()->GetCurrentContext() != CONTEXT_PAUSE)
                 {
-                    IOSLog("FRAME %u launching dashboard", debugFrame);
+                    IOSLog("F%u LaunchDashboard", debugFrame);
 
                     GetGame()->GetPlatform()->LaunchDashboard();
 
-                    IOSLog("FRAME %u returning from Game::Run", debugFrame);
+                    IOSLog("F%u Run returning", debugFrame);
                     return;
                 }
                 else
                 {
-                    IOSLog("FRAME %u setting CONTEXT_EXIT", debugFrame);
+                    IOSLog("F%u SetContext EXIT", debugFrame);
                     mpGameFlow->SetContext(CONTEXT_EXIT);
                 }
             }
         }
 
         IOSLog(
-            "FRAME %u after SDL event loop events=%u",
+            "F%u SDL events=%u",
             debugFrame,
             eventCount
         );
 
-#endif // RAD_SDL_PLATFORM
+#endif
 
-        bool pausedForErrors = mpPlatform->PausedForErrors();
+        const bool paused = mpPlatform->PausedForErrors();
 
         IOSLog(
-            "FRAME %u PausedForErrors=%d",
+            "F%u FLOW begin paused=%d ctx=%d",
             debugFrame,
-            pausedForErrors ? 1 : 0
+            paused ? 1 : 0,
+            (int)mpGameFlow->GetCurrentContext()
         );
 
-        if (!pausedForErrors)
+        if (!paused)
         {
-            DEMOPROFILE(g_DemoProfiler.Start(PROFILE_CHANNEL_AI);)
+            IOSLog("F%u TimerList begin", debugFrame);
 
-            IOSLog("FRAME %u before mpTimerList->Service", debugFrame);
             mpTimerList->Service();
-            IOSLog("FRAME %u after mpTimerList->Service", debugFrame);
 
-            IOSLog("FRAME %u before mpGameFlow->OnTimerDone", debugFrame);
-            mpGameFlow->OnTimerDone(elapsed, NULL);
-            IOSLog("FRAME %u after mpGameFlow->OnTimerDone", debugFrame);
-
-            DEMOPROFILE(g_DemoProfiler.Stop(PROFILE_CHANNEL_AI);)
+            IOSLog("F%u TimerList end", debugFrame);
 
             IOSLog(
-                "FRAME %u mExitNow=%d after GameFlow",
+                "F%u GameFlow begin ctx=%d",
                 debugFrame,
+                (int)mpGameFlow->GetCurrentContext()
+            );
+
+            mpGameFlow->OnTimerDone(elapsed, NULL);
+
+            IOSLog(
+                "F%u GameFlow end ctx=%d exit=%d",
+                debugFrame,
+                (int)mpGameFlow->GetCurrentContext(),
                 mExitNow ? 1 : 0
             );
 
             if (!mExitNow)
             {
-                DEMOPROFILE(g_DemoProfiler.Start(PROFILE_CHANNEL_RENDER);)
+                IOSLog("F%u RenderFlow begin", debugFrame);
 
-                IOSLog("FRAME %u before mpRenderFlow->OnTimerDone", debugFrame);
                 mpRenderFlow->OnTimerDone(elapsed, NULL);
-                IOSLog("FRAME %u after mpRenderFlow->OnTimerDone", debugFrame);
 
-                DEMOPROFILE(g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER);)
+                IOSLog("F%u RenderFlow end", debugFrame);
             }
         }
         else if (mpPlatform->IsControllerError())
         {
-            IOSLog("FRAME %u controller error path", debugFrame);
+            IOSLog("F%u controller-error path", debugFrame);
 
             if (InputManager::GetInstance())
             {
-                IOSLog("FRAME %u before InputManager::Update", debugFrame);
+                IOSLog("F%u InputManager begin", debugFrame);
+
                 InputManager::GetInstance()->Update(elapsed);
-                IOSLog("FRAME %u after InputManager::Update", debugFrame);
+
+                IOSLog("F%u InputManager end", debugFrame);
             }
         }
         else
         {
-            IOSLog("FRAME %u paused/error fallback path", debugFrame);
+            IOSLog("F%u generic paused/error path", debugFrame);
 
 #ifdef RAD_GAMECUBE
             GCManager::GetInstance()->OnTimerDone(elapsed, NULL);
 #endif
         }
 
-        IOSLog("FRAME %u before radFileService", debugFrame);
+        IOSLog("F%u FileService begin", debugFrame);
+
         ::radFileService();
-        IOSLog("FRAME %u after radFileService", debugFrame);
+
+        IOSLog("F%u FileService end", debugFrame);
 
 #ifndef RAD_TVOS
 
-        IOSLog("FRAME %u before radDbgComService", debugFrame);
-        ::radDbgComService();
-        IOSLog("FRAME %u after radDbgComService", debugFrame);
+        IOSLog("F%u DbgCom begin", debugFrame);
 
-        IOSLog("FRAME %u before radDebugConsoleService", debugFrame);
+        ::radDbgComService();
+
+        IOSLog("F%u DbgCom end", debugFrame);
+
+        IOSLog("F%u DebugConsole begin", debugFrame);
+
         ::radDebugConsoleService();
-        IOSLog("FRAME %u after radDebugConsoleService", debugFrame);
+
+        IOSLog("F%u DebugConsole end", debugFrame);
 
 #endif
 
         if (CommandLineOptions::Get(CLO_MEMORY_MONITOR))
         {
-            IOSLog("FRAME %u before radMemoryMonitorService", debugFrame);
+            IOSLog("F%u MemoryMonitor begin", debugFrame);
+
             ::radMemoryMonitorService();
-            IOSLog("FRAME %u after radMemoryMonitorService", debugFrame);
+
+            IOSLog("F%u MemoryMonitor end", debugFrame);
         }
 
-        IOSLog("FRAME %u before SoundManager::Update", debugFrame);
+        IOSLog("F%u Sound begin", debugFrame);
+
         SoundManager::GetInstance()->Update();
-        IOSLog("FRAME %u after SoundManager::Update", debugFrame);
+
+        IOSLog("F%u Sound end", debugFrame);
 
         if (mpPlatform->PausedForErrors())
         {
-            IOSLog(
-                "FRAME %u before SoundManager::UpdateOncePerFrame error path",
-                debugFrame
-            );
+            IOSLog("F%u Sound error-frame begin", debugFrame);
 
             SoundManager::GetInstance()->UpdateOncePerFrame(
                 0,
@@ -1000,91 +955,33 @@ void Game::Run()
                 true
             );
 
-            IOSLog(
-                "FRAME %u after SoundManager::UpdateOncePerFrame error path",
-                debugFrame
-            );
+            IOSLog("F%u Sound error-frame end", debugFrame);
         }
 
-        DEMOPROFILE(g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD);)
+        IOSLog("F%u LoadManager begin", debugFrame);
 
-        IOSLog("FRAME %u before p3d::loadManager->SwitchTask", debugFrame);
         p3d::loadManager->SwitchTask();
-        IOSLog("FRAME %u after p3d::loadManager->SwitchTask", debugFrame);
 
-        DEMOPROFILE(g_DemoProfiler.Stop(PROFILE_CHANNEL_LOAD);)
+        IOSLog("F%u LoadManager end", debugFrame);
 
         ++mFrameCount;
 
         IOSLog(
-            "FRAME %u engine mFrameCount=%u",
+            "F%u END engineFrame=%u ctx=%d",
             debugFrame,
-            mFrameCount
+            mFrameCount,
+            (int)mpGameFlow->GetCurrentContext()
         );
-
-        DEMOPROFILE(g_DemoProfiler.Stop(PROFILE_CHANNEL_ALL);)
-
-#ifdef DEMO_MODE_PROFILER
-        g_AllowDebugOutput = true;
-
-        if (g_inDemoMode)
-        {
-            if (!g_DemoProfiler_Started &&
-                (g_DemoProfiler_CurrentFrame == g_DemoProfiler_StartFrame))
-            {
-                g_DemoProfiler_Started = true;
-                g_DemoProfiler.StartRecording();
-                rReleasePrintf("Beginning demo profile run\n");
-            }
-
-            if (g_DemoProfiler.IsRecording())
-            {
-                pddiColour colour(255, 255, 255);
-
-                if (g_DemoProfiler.GetAlertStatus() ==
-                    DemoProfiler::PROFILER_ALERT_YELLOW)
-                {
-                    colour.Set(255, 255, 0);
-                }
-                else if (g_DemoProfiler.GetAlertStatus() ==
-                         DemoProfiler::PROFILER_ALERT_RED)
-                {
-                    colour.Set(255, 0, 0);
-                }
-
-                char duff[255];
-
-                sprintf(
-                    duff,
-                    "%d %d",
-                    g_DemoProfiler.GetCurrentFrame(),
-                    (g_DemoProfiler.GetSample(0) + 500) / 1000
-                );
-
-                p3d::pddi->DrawString(duff, 10, 400, colour);
-            }
-
-            g_DemoProfiler.NextFrame();
-            g_DemoProfiler_CurrentFrame++;
-        }
-
-        g_AllowDebugOutput = false;
-#endif
-
-        END_PROFILE("GameLoop")
-        END_PROFILER_FRAME();
-
-        IOSLog("FRAME %u END", debugFrame);
 
         ++debugFrame;
     }
 
     IOSLog(
-        "RUN exited normally after %u frames",
-        debugFrame
+        "RUN EXIT frames=%u engineFrame=%u",
+        debugFrame,
+        mFrameCount
     );
 }
-
 
 //==============================================================================
 // Game::Stop
