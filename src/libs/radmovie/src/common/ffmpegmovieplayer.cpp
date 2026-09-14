@@ -233,154 +233,678 @@ bool radMoviePlayer::Render( void )
 // radMoviePlayer::Load
 //=============================================================================
 
-void radMoviePlayer::Load( const char * pVideoFileName, unsigned int audioTrackIndex )
-{   
+void radMoviePlayer::Load( const char* pVideoFileName, unsigned int audioTrackIndex )
+{
+    IOSLog(
+        "MOVIE ENTER this=%p file=%s audioTrack=%u state=%d",
+        this,
+        pVideoFileName ? pVideoFileName : "<null>",
+        audioTrackIndex,
+        (int)m_State
+    );
+
     rAssert( m_State == IRadMoviePlayer2::NoData );
     rAssert( pVideoFileName != NULL );
+
+    if ( pVideoFileName == NULL )
+    {
+        IOSLog( "MOVIE FATAL: filename is NULL" );
+        return;
+    }
 
     rDebugPrintf( "radMoviePlayer: Loading %s\n", pVideoFileName );
 
 #ifdef RAD_TVOS
-    // On tvOS, resolve relative path to absolute path in app bundle
+
     std::string resolvedPath = radMovieResolveTvosPath( pVideoFileName );
     const char* actualPath = resolvedPath.c_str();
-    
-    // ========================================================================
-    // VIDEO LOAD DIAGNOSTIC
-    // ========================================================================
-    SDL_Log( "========================================================" );
-    SDL_Log( "[VIDEO_LOAD] *** LOADING VIDEO FILE ***" );
-    SDL_Log( "[VIDEO_LOAD] Input path: %s", pVideoFileName );
-    SDL_Log( "[VIDEO_LOAD] Resolved path: %s", actualPath );
-    
-    // Check if file exists
-    FILE* testFile = fopen( actualPath, "rb" );
-    if ( testFile ) {
-        fseek( testFile, 0, SEEK_END );
-        long fileSize = ftell( testFile );
-        fclose( testFile );
-        SDL_Log( "[VIDEO_LOAD] File EXISTS, size=%ld bytes", fileSize );
-    } else {
-        SDL_Log( "[VIDEO_LOAD] CRITICAL ERROR: File does NOT exist or cannot be opened!" );
-    }
-    SDL_Log( "========================================================" );
+
 #else
+
     const char* actualPath = pVideoFileName;
+
 #endif
 
-    m_refIRadStopwatch->Stop( );
-    m_refIRadStopwatch->Reset( );
+    IOSLog( "MOVIE path=%s", actualPath ? actualPath : "<null>" );
 
     //
-    // Reset the variables
+    // Verify that iOS can actually see the file.
     //
+    FILE* testFile = fopen( actualPath, "rb" );
 
-    m_VideoFrameState = VideoFrame_Unlocked;
-
-    SetState( IRadMoviePlayer2::Loading );
-
-    m_pFormatCtx = avformat_alloc_context();
-    int openResult = avformat_open_input( &m_pFormatCtx, actualPath, NULL, NULL );
-#ifdef RAD_TVOS
-    if ( openResult < 0 ) {
-        char errBuf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror( openResult, errBuf, AV_ERROR_MAX_STRING_SIZE );
-        SDL_Log( "[VIDEO_LOAD] CRITICAL ERROR: avformat_open_input FAILED: %s", errBuf );
-    } else {
-        SDL_Log( "[VIDEO_LOAD] avformat_open_input SUCCESS" );
-    }
-#endif
-    AV_CHK( openResult );
-    AV_CHK( avformat_find_stream_info( m_pFormatCtx, NULL ) );
-
-    const AVCodec* pVideoCodec = NULL;
-    m_VideoTrackIndex = av_find_best_stream( m_pFormatCtx, AVMEDIA_TYPE_VIDEO, -1, -1, &pVideoCodec, 0 );
-    AVCodecParameters* pVideoParams = m_pFormatCtx->streams[m_VideoTrackIndex]->codecpar;
-    m_pVideoCtx = avcodec_alloc_context3( pVideoCodec );
-    AV_CHK( avcodec_parameters_to_context( m_pVideoCtx, pVideoParams ) );
-    AV_CHK( avcodec_open2( m_pVideoCtx, pVideoCodec, NULL ) );
-
-#ifndef RAD_VITAGL
-    m_pSwsCtx = sws_getContext(
-        pVideoParams->width,
-        pVideoParams->height,
-        AV_PIX_FMT_YUV420P,
-        pVideoParams->width,
-        pVideoParams->height,
-        AV_PIX_FMT_BGRA,
-        0, NULL, NULL, NULL
-    );
-#endif
-
-    if( audioTrackIndex != radMovie_NoAudioTrack )
+    if ( testFile != NULL )
     {
-        const AVCodec* pAudioCodec = NULL;
-        m_AudioTrackIndex = av_find_best_stream( m_pFormatCtx, AVMEDIA_TYPE_AUDIO, audioTrackIndex + 1, -1, &pAudioCodec, 0 );
-        AVCodecParameters* pAudioParams = m_pFormatCtx->streams[m_AudioTrackIndex]->codecpar;
-        m_pAudioCtx = avcodec_alloc_context3( pAudioCodec );
-        AV_CHK( avcodec_parameters_to_context( m_pAudioCtx, pAudioParams ) );
-        AV_CHK( avcodec_open2( m_pAudioCtx, pAudioCodec, NULL ) );
+        fseek( testFile, 0, SEEK_END );
 
-        AVChannelLayout layout = { AV_CHANNEL_ORDER_NATIVE, 2, AV_CH_LAYOUT_STEREO };
-        AV_CHK( swr_alloc_set_opts2( &m_pSwrCtx,
-            &layout,
-            AV_SAMPLE_FMT_S16,
-            pAudioParams->sample_rate,
-            &pAudioParams->ch_layout,
-            (AVSampleFormat)pAudioParams->format,
-            pAudioParams->sample_rate,
-            0,
-            NULL ) );
-        swr_init( m_pSwrCtx );
+        const long fileSize = ftell( testFile );
+
+        fclose( testFile );
+
+        IOSLog(
+            "MOVIE file exists size=%ld",
+            fileSize
+        );
     }
     else
     {
+        IOSLog(
+            "MOVIE FATAL: fopen failed for %s errno=%d",
+            actualPath,
+            errno
+        );
+
+        return;
+    }
+
+    IOSLog( "MOVIE 01 stopwatch stop/reset" );
+
+    m_refIRadStopwatch->Stop();
+    m_refIRadStopwatch->Reset();
+
+    m_VideoFrameState = VideoFrame_Unlocked;
+
+    IOSLog( "MOVIE 02 SetState Loading" );
+
+    SetState( IRadMoviePlayer2::Loading );
+
+    //
+    // FORMAT CONTEXT
+    //
+
+    IOSLog( "MOVIE 03 avformat_alloc_context" );
+
+    m_pFormatCtx = avformat_alloc_context();
+
+    IOSLog(
+        "MOVIE 04 formatCtx=%p",
+        m_pFormatCtx
+    );
+
+    if ( m_pFormatCtx == NULL )
+    {
+        IOSLog( "MOVIE FATAL: avformat_alloc_context returned NULL" );
+        return;
+    }
+
+    IOSLog( "MOVIE 05 avformat_open_input" );
+
+    int openResult =
+        avformat_open_input(
+            &m_pFormatCtx,
+            actualPath,
+            NULL,
+            NULL
+        );
+
+    IOSLog(
+        "MOVIE 06 avformat_open_input result=%d formatCtx=%p",
+        openResult,
+        m_pFormatCtx
+    );
+
+    if ( openResult < 0 )
+    {
+        char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+
+        av_strerror(
+            openResult,
+            errorBuffer,
+            sizeof( errorBuffer )
+        );
+
+        IOSLog(
+            "MOVIE FATAL: avformat_open_input=%d error=%s",
+            openResult,
+            errorBuffer
+        );
+
+        return;
+    }
+
+    IOSLog( "MOVIE 07 avformat_find_stream_info" );
+
+    const int streamInfoResult =
+        avformat_find_stream_info(
+            m_pFormatCtx,
+            NULL
+        );
+
+    IOSLog(
+        "MOVIE 08 stream info result=%d nb_streams=%u",
+        streamInfoResult,
+        m_pFormatCtx ? m_pFormatCtx->nb_streams : 0
+    );
+
+    if ( streamInfoResult < 0 )
+    {
+        char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+
+        av_strerror(
+            streamInfoResult,
+            errorBuffer,
+            sizeof( errorBuffer )
+        );
+
+        IOSLog(
+            "MOVIE FATAL: find_stream_info=%d error=%s",
+            streamInfoResult,
+            errorBuffer
+        );
+
+        return;
+    }
+
+    //
+    // VIDEO STREAM
+    //
+
+    const AVCodec* pVideoCodec = NULL;
+
+    IOSLog( "MOVIE 09 av_find_best_stream VIDEO" );
+
+    m_VideoTrackIndex =
+        av_find_best_stream(
+            m_pFormatCtx,
+            AVMEDIA_TYPE_VIDEO,
+            -1,
+            -1,
+            &pVideoCodec,
+            0
+        );
+
+    IOSLog(
+        "MOVIE 10 video index=%d codec=%p streams=%u",
+        m_VideoTrackIndex,
+        pVideoCodec,
+        m_pFormatCtx->nb_streams
+    );
+
+    //
+    // IMPORTANT:
+    // Original code indexed streams[] without checking this.
+    //
+    if ( m_VideoTrackIndex < 0 ||
+         (unsigned int)m_VideoTrackIndex >= m_pFormatCtx->nb_streams )
+    {
+        IOSLog(
+            "MOVIE FATAL: invalid video stream index=%d streamCount=%u",
+            m_VideoTrackIndex,
+            m_pFormatCtx->nb_streams
+        );
+
+        return;
+    }
+
+    if ( pVideoCodec == NULL )
+    {
+        IOSLog( "MOVIE FATAL: video codec is NULL" );
+        return;
+    }
+
+    AVStream* pVideoStream =
+        m_pFormatCtx->streams[m_VideoTrackIndex];
+
+    IOSLog(
+        "MOVIE 11 video stream=%p",
+        pVideoStream
+    );
+
+    if ( pVideoStream == NULL )
+    {
+        IOSLog( "MOVIE FATAL: video stream pointer NULL" );
+        return;
+    }
+
+    AVCodecParameters* pVideoParams =
+        pVideoStream->codecpar;
+
+    IOSLog(
+        "MOVIE 12 video params=%p",
+        pVideoParams
+    );
+
+    if ( pVideoParams == NULL )
+    {
+        IOSLog( "MOVIE FATAL: video codecpar NULL" );
+        return;
+    }
+
+    IOSLog(
+        "MOVIE video width=%d height=%d format=%d codec_id=%d",
+        pVideoParams->width,
+        pVideoParams->height,
+        pVideoParams->format,
+        pVideoParams->codec_id
+    );
+
+    IOSLog( "MOVIE 13 avcodec_alloc_context3 VIDEO" );
+
+    m_pVideoCtx =
+        avcodec_alloc_context3( pVideoCodec );
+
+    IOSLog(
+        "MOVIE 14 videoCtx=%p",
+        m_pVideoCtx
+    );
+
+    if ( m_pVideoCtx == NULL )
+    {
+        IOSLog( "MOVIE FATAL: video codec context allocation failed" );
+        return;
+    }
+
+    int result =
+        avcodec_parameters_to_context(
+            m_pVideoCtx,
+            pVideoParams
+        );
+
+    IOSLog(
+        "MOVIE 15 video parameters_to_context=%d",
+        result
+    );
+
+    if ( result < 0 )
+    {
+        IOSLog( "MOVIE FATAL: video parameters_to_context failed" );
+        return;
+    }
+
+    result =
+        avcodec_open2(
+            m_pVideoCtx,
+            pVideoCodec,
+            NULL
+        );
+
+    IOSLog(
+        "MOVIE 16 avcodec_open2 VIDEO=%d",
+        result
+    );
+
+    if ( result < 0 )
+    {
+        char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+
+        av_strerror(
+            result,
+            errorBuffer,
+            sizeof( errorBuffer )
+        );
+
+        IOSLog(
+            "MOVIE FATAL: video avcodec_open2=%s",
+            errorBuffer
+        );
+
+        return;
+    }
+
+#ifndef RAD_VITAGL
+
+    IOSLog( "MOVIE 17 sws_getContext" );
+
+    m_pSwsCtx =
+        sws_getContext(
+            pVideoParams->width,
+            pVideoParams->height,
+            AV_PIX_FMT_YUV420P,
+            pVideoParams->width,
+            pVideoParams->height,
+            AV_PIX_FMT_BGRA,
+            0,
+            NULL,
+            NULL,
+            NULL
+        );
+
+    IOSLog(
+        "MOVIE 18 swsCtx=%p",
+        m_pSwsCtx
+    );
+
+    if ( m_pSwsCtx == NULL )
+    {
+        IOSLog( "MOVIE FATAL: sws_getContext returned NULL" );
+        return;
+    }
+
+#endif
+
+    //
+    // AUDIO STREAM
+    //
+
+    if ( audioTrackIndex != radMovie_NoAudioTrack )
+    {
+        const AVCodec* pAudioCodec = NULL;
+
+        IOSLog(
+            "MOVIE 19 av_find_best_stream AUDIO requested=%u",
+            audioTrackIndex
+        );
+
+        m_AudioTrackIndex =
+            av_find_best_stream(
+                m_pFormatCtx,
+                AVMEDIA_TYPE_AUDIO,
+                audioTrackIndex + 1,
+                -1,
+                &pAudioCodec,
+                0
+            );
+
+        IOSLog(
+            "MOVIE 20 audio index=%d codec=%p streamCount=%u",
+            m_AudioTrackIndex,
+            pAudioCodec,
+            m_pFormatCtx->nb_streams
+        );
+
+        //
+        // Original code also indexed streams[] here without checking.
+        //
+        if ( m_AudioTrackIndex < 0 ||
+             (unsigned int)m_AudioTrackIndex >= m_pFormatCtx->nb_streams )
+        {
+            IOSLog(
+                "MOVIE FATAL: invalid audio stream index=%d requested=%u",
+                m_AudioTrackIndex,
+                audioTrackIndex
+            );
+
+            return;
+        }
+
+        if ( pAudioCodec == NULL )
+        {
+            IOSLog( "MOVIE FATAL: audio codec NULL" );
+            return;
+        }
+
+        AVStream* pAudioStream =
+            m_pFormatCtx->streams[m_AudioTrackIndex];
+
+        IOSLog(
+            "MOVIE 21 audio stream=%p",
+            pAudioStream
+        );
+
+        if ( pAudioStream == NULL )
+        {
+            IOSLog( "MOVIE FATAL: audio stream NULL" );
+            return;
+        }
+
+        AVCodecParameters* pAudioParams =
+            pAudioStream->codecpar;
+
+        IOSLog(
+            "MOVIE 22 audio params=%p",
+            pAudioParams
+        );
+
+        if ( pAudioParams == NULL )
+        {
+            IOSLog( "MOVIE FATAL: audio codecpar NULL" );
+            return;
+        }
+
+        IOSLog(
+            "MOVIE audio rate=%d channels=%d format=%d codec_id=%d",
+            pAudioParams->sample_rate,
+            pAudioParams->ch_layout.nb_channels,
+            pAudioParams->format,
+            pAudioParams->codec_id
+        );
+
+        m_pAudioCtx =
+            avcodec_alloc_context3( pAudioCodec );
+
+        IOSLog(
+            "MOVIE 23 audioCtx=%p",
+            m_pAudioCtx
+        );
+
+        if ( m_pAudioCtx == NULL )
+        {
+            IOSLog( "MOVIE FATAL: audio codec context allocation failed" );
+            return;
+        }
+
+        result =
+            avcodec_parameters_to_context(
+                m_pAudioCtx,
+                pAudioParams
+            );
+
+        IOSLog(
+            "MOVIE 24 audio parameters_to_context=%d",
+            result
+        );
+
+        if ( result < 0 )
+        {
+            IOSLog( "MOVIE FATAL: audio parameters_to_context failed" );
+            return;
+        }
+
+        result =
+            avcodec_open2(
+                m_pAudioCtx,
+                pAudioCodec,
+                NULL
+            );
+
+        IOSLog(
+            "MOVIE 25 audio avcodec_open2=%d",
+            result
+        );
+
+        if ( result < 0 )
+        {
+            char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+
+            av_strerror(
+                result,
+                errorBuffer,
+                sizeof( errorBuffer )
+            );
+
+            IOSLog(
+                "MOVIE FATAL: audio avcodec_open2=%s",
+                errorBuffer
+            );
+
+            return;
+        }
+
+        AVChannelLayout layout = {
+            AV_CHANNEL_ORDER_NATIVE,
+            2,
+            AV_CH_LAYOUT_STEREO
+        };
+
+        IOSLog( "MOVIE 26 swr_alloc_set_opts2" );
+
+        result =
+            swr_alloc_set_opts2(
+                &m_pSwrCtx,
+                &layout,
+                AV_SAMPLE_FMT_S16,
+                pAudioParams->sample_rate,
+                &pAudioParams->ch_layout,
+                (AVSampleFormat)pAudioParams->format,
+                pAudioParams->sample_rate,
+                0,
+                NULL
+            );
+
+        IOSLog(
+            "MOVIE 27 swr_alloc result=%d swrCtx=%p",
+            result,
+            m_pSwrCtx
+        );
+
+        if ( result < 0 || m_pSwrCtx == NULL )
+        {
+            IOSLog( "MOVIE FATAL: swr_alloc_set_opts2 failed" );
+            return;
+        }
+
+        result =
+            swr_init( m_pSwrCtx );
+
+        IOSLog(
+            "MOVIE 28 swr_init=%d",
+            result
+        );
+
+        if ( result < 0 )
+        {
+            IOSLog( "MOVIE FATAL: swr_init failed" );
+            return;
+        }
+    }
+    else
+    {
+        IOSLog( "MOVIE 19 no audio requested" );
+
         m_AudioTrackIndex = 0;
     }
+
+    //
+    // PACKETS / FRAMES
+    //
+
+    IOSLog( "MOVIE 29 allocate packet/frames" );
 
     m_pPacket = av_packet_alloc();
     m_pVideoFrame = av_frame_alloc();
     m_pAudioFrame = av_frame_alloc();
 
-    alGenSources( 1, &m_AudioSource );
-    alSourcei( m_AudioSource, AL_SOURCE_RELATIVE, AL_TRUE );
-    alSourcef( m_AudioSource, AL_GAIN, m_Volume );
+    IOSLog(
+        "MOVIE 30 packet=%p videoFrame=%p audioFrame=%p",
+        m_pPacket,
+        m_pVideoFrame,
+        m_pAudioFrame
+    );
 
-    //
-    // Initialize the render strategy & and pass the file to
-    // the decoder to deal with
-    //
-
-    m_refIRadMovieRenderStrategy->ChangeParameters( pVideoParams->width, pVideoParams->height );
-
-    //
-    // Print out some helpful information
-    //
-    rDebugPrintf( "\nradMoviePlayer: Summary\n" \
-                  "     * Resolution         [%dx%d]\n" \
-                  "     * Format             [%d]\n" \
-                  "     * Audio Track        [%d]\n\n",
-        pVideoParams->width, pVideoParams->height,
-        pVideoParams->format, m_AudioTrackIndex );
-
-#ifdef RAD_TVOS
-    SDL_Log( "========================================================" );
-    SDL_Log( "[VIDEO_LOAD] *** VIDEO LOADED SUCCESSFULLY ***" );
-    SDL_Log( "[VIDEO_LOAD] Resolution: %dx%d", pVideoParams->width, pVideoParams->height );
-    SDL_Log( "[VIDEO_LOAD] Pixel Format: %d (YUV420P=%d)", pVideoParams->format, AV_PIX_FMT_YUV420P );
-    SDL_Log( "[VIDEO_LOAD] Audio Track: %d", m_AudioTrackIndex );
-    SDL_Log( "[VIDEO_LOAD] SwsContext: %p (needed for color conversion)", (void*)m_pSwsCtx );
-    if ( !m_pSwsCtx ) {
-        SDL_Log( "[VIDEO_LOAD] WARNING: SwsContext is NULL - color conversion will fail!" );
+    if ( m_pPacket == NULL ||
+         m_pVideoFrame == NULL ||
+         m_pAudioFrame == NULL )
+    {
+        IOSLog( "MOVIE FATAL: packet/frame allocation failed" );
+        return;
     }
-    SDL_Log( "========================================================" );
-#endif
 
-    // The buffered data source's input must be set before the stream player's
+    //
+    // OPENAL
+    //
+
+    IOSLog( "MOVIE 31 alGenSources" );
+
+    alGetError();
+
+    alGenSources( 1, &m_AudioSource );
+
+    ALenum alError = alGetError();
+
+    IOSLog(
+        "MOVIE 32 audioSource=%u alError=%d",
+        m_AudioSource,
+        (int)alError
+    );
+
+    if ( alError != AL_NO_ERROR )
+    {
+        IOSLog(
+            "MOVIE FATAL: alGenSources failed error=%d",
+            (int)alError
+        );
+
+        return;
+    }
+
+    alSourcei(
+        m_AudioSource,
+        AL_SOURCE_RELATIVE,
+        AL_TRUE
+    );
+
+    IOSLog(
+        "MOVIE 33 alSourcei error=%d",
+        (int)alGetError()
+    );
+
+    alSourcef(
+        m_AudioSource,
+        AL_GAIN,
+        m_Volume
+    );
+
+    IOSLog(
+        "MOVIE 34 alSourcef error=%d volume=%f",
+        (int)alGetError(),
+        m_Volume
+    );
+
+    //
+    // RENDER STRATEGY
+    //
+
+    IOSLog(
+        "MOVIE 35 renderStrategy=%p",
+        m_refIRadMovieRenderStrategy.operator->()
+    );
+
+    if ( m_refIRadMovieRenderStrategy == NULL )
+    {
+        IOSLog( "MOVIE FATAL: render strategy NULL" );
+        return;
+    }
+
+    IOSLog(
+        "MOVIE 36 ChangeParameters %dx%d",
+        pVideoParams->width,
+        pVideoParams->height
+    );
+
+    m_refIRadMovieRenderStrategy->ChangeParameters(
+        pVideoParams->width,
+        pVideoParams->height
+    );
+
+    IOSLog( "MOVIE 37 ChangeParameters complete" );
+
+    rDebugPrintf(
+        "\nradMoviePlayer: Summary\n"
+        "     * Resolution         [%dx%d]\n"
+        "     * Format             [%d]\n"
+        "     * Audio Track        [%d]\n\n",
+        pVideoParams->width,
+        pVideoParams->height,
+        pVideoParams->format,
+        m_AudioTrackIndex
+    );
+
+    IOSLog(
+        "MOVIE READY resolution=%dx%d format=%d audio=%d",
+        pVideoParams->width,
+        pVideoParams->height,
+        pVideoParams->format,
+        m_AudioTrackIndex
+    );
+
+    IOSLog( "MOVIE 38 SetState ReadyToPlay" );
 
     SetState( IRadMoviePlayer2::ReadyToPlay );
 
-    Service( );
+    IOSLog( "MOVIE 39 before Service" );
+
+    Service();
+
+    IOSLog( "MOVIE 40 Service returned" );
 }
 
 //=============================================================================
