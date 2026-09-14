@@ -28,7 +28,100 @@
 //========================================
 static void ProcessCommandLineArguments( int argc, char *argv[] );
 static void ProcessCommandLineArgumentsFromFile();
-static void IOSLog(const char* fmt, ...);
+
+static NSMutableString* gDebugLog = nil;
+static UITextView* gDebugView = nil;
+
+static UIWindow* GetDebugWindow()
+{
+    for (UIScene* scene in UIApplication.sharedApplication.connectedScenes)
+    {
+        if (scene.activationState != UISceneActivationStateForegroundActive)
+            continue;
+
+        if (![scene isKindOfClass:[UIWindowScene class]])
+            continue;
+
+        UIWindowScene* windowScene = (UIWindowScene*)scene;
+        for (UIWindow* window in windowScene.windows)
+        {
+            if (window.isKeyWindow)
+                return window;
+        }
+
+        if (windowScene.windows.count > 0)
+            return windowScene.windows.firstObject;
+    }
+
+    return nil;
+}
+
+static void IOSCreateDebugOverlay()
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gDebugView != nil)
+            return;
+
+        UIWindow* window = GetDebugWindow();
+        if (window == nil)
+            return;
+
+        gDebugView =
+            [[UITextView alloc] initWithFrame:window.bounds];
+
+        gDebugView.backgroundColor =
+            [UIColor colorWithWhite:0.0 alpha:0.75];
+
+        gDebugView.textColor = UIColor.greenColor;
+        gDebugView.font =
+            [UIFont monospacedSystemFontOfSize:11.0
+                                       weight:UIFontWeightRegular];
+
+        gDebugView.editable = NO;
+        gDebugView.selectable = YES;
+        gDebugView.userInteractionEnabled = YES;
+        gDebugView.autoresizingMask =
+            UIViewAutoresizingFlexibleWidth |
+            UIViewAutoresizingFlexibleHeight;
+        gDebugView.text = gDebugLog ?: @"";
+        [window addSubview:gDebugView];
+        [window bringSubviewToFront:gDebugView];
+    });
+}
+
+static void IOSLog(const char* fmt, ...)
+{
+    char buffer[4096];
+
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    NSLog(@"[SHR] %s", buffer);
+
+    @autoreleasepool
+    {
+        NSString* line =
+            [NSString stringWithFormat:@"%s\n", buffer];
+
+        if (gDebugLog == nil)
+            gDebugLog = [[NSMutableString alloc] init];
+
+        [gDebugLog appendString:line];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (gDebugView != nil)
+            {
+                gDebugView.text = gDebugLog;
+
+                NSRange bottom =
+                    NSMakeRange(gDebugView.text.length, 0);
+
+                [gDebugView scrollRangeToVisible:bottom];
+            }
+        });
+    }
+}
 
 int SDL_main( int argc, char *argv[] );
 
