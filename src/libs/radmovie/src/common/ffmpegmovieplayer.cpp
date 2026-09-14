@@ -40,6 +40,11 @@
 #endif
 #include <string>
 
+#ifdef RAD_IOS
+#include <errno.h>
+#include "../../../../code/main/iosplatform.h"
+#endif
+
 // Video frame lifecycle logging for debugging
 static unsigned int s_VideoFrameDecodeCount = 0;
 static unsigned int s_VideoFrameUploadCount = 0;
